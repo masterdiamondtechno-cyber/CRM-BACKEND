@@ -1,0 +1,6 @@
+package com.company.crm.audit;
+import com.company.crm.common.ApiResponse;import com.company.crm.security.TenantContext;import org.springframework.http.*;import org.springframework.jdbc.core.JdbcTemplate;import org.springframework.security.access.prepost.PreAuthorize;import org.springframework.web.bind.annotation.*;import java.util.*;
+@RestController @RequestMapping("/api/v1/audit-logs") public class AuditController{
+ private final JdbcTemplate db;public AuditController(JdbcTemplate d){db=d;}
+ @GetMapping @PreAuthorize("hasRole('ADMIN')")public ApiResponse<Map<String,Object>> list(@RequestParam(defaultValue="0")int page,@RequestParam(defaultValue="50")int size){if(page<0||size<1||size>100)throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST,"Invalid pagination");UUID tenantId=TenantContext.requireTenantId();long total=db.queryForObject("select count(*) from audit_logs where tenant_id=?",Long.class,tenantId);var content=db.queryForList("select id,actor_id,action,entity_type,entity_id,details,created_at from audit_logs where tenant_id=? order by created_at desc limit ? offset ?",tenantId,size,(long)page*size);return ApiResponse.ok("Audit logs",Map.of("content",content,"page",page,"size",size,"totalElements",total,"totalPages",(int)Math.ceil((double)total/size)));}
+}

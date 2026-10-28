@@ -1,0 +1,51 @@
+spring:
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+  application:
+    name: crm-backend
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/crm}
+    username: ${DB_USERNAME:crm}
+    password: ${DB_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:true}
+      mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:true}
+server:
+  port: ${PORT:8080}
+crm:
+  files:
+    directory: ${CRM_FILES_DIRECTORY:./data/files}
+  registration:
+    enabled: ${PUBLIC_REGISTRATION_ENABLED:false}
+    verification-url: ${REGISTRATION_VERIFICATION_URL:}
+    verification-minutes: ${REGISTRATION_VERIFICATION_MINUTES:30}
+  invitation:
+    frontend-url: ${INVITATION_FRONTEND_URL:}
+    expiration-hours: ${INVITATION_EXPIRATION_HOURS:72}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:30}
+  cors:
+    allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}
+  bootstrap:
+    admin-email: ${ADMIN_EMAIL:}
+    admin-password: ${ADMIN_PASSWORD:}
+  password-reset:
+    frontend-url: ${PASSWORD_RESET_URL:}
+    token-minutes: ${RESET_TOKEN_MINUTES:30}
+  refresh-token-days: ${REFRESH_TOKEN_DAYS:30}
+
+

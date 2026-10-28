@@ -1,0 +1,1 @@
+Implemented: lead CRUD, assignee/owner visibility, client/contact relationship checks, lost/won validation, optimistic locking, lead_status_history tracking, and transactional conversion of a won lead into a tenant-owned client with an optional primary contact. Conversion records client activity and audit history.

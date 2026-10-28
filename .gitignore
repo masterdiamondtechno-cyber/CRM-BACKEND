@@ -1,0 +1,6 @@
+target/
+*.class
+.env
+.env.*
+!.env.example
+data/files/

@@ -1,0 +1,1 @@
+Implemented: create/list/read/update, assignee visibility, status lifecycle, due-date/priority filters, overdue filters, completion timestamps, and client/contact/lead/project relationship checks. External notifications are not configured.
