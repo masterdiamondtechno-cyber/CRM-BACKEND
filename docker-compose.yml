@@ -14,14 +14,23 @@ services:
       - "5432:5432"
     volumes:
       - crm_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crm"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   # ── CRM Spring Boot Backend ────────────────────────────────────────────────
   crm-backend:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: crm_backend
     restart: always
     depends_on:
-      - crm-postgres
+      crm-postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -31,9 +40,19 @@ services:
       - JWT_SECRET=c29tZS1zdXBlci1zZWNyZXQta2V5LWZvci1jcm0tYXBwbGljYXRpb24tc2VjdXJpdHktMjAyNA==
       - FRONTEND_ORIGIN=http://localhost:5173
       - PORT=8080
+      - ADMIN_EMAIL=admin@crm.local
+      - ADMIN_PASSWORD=Admin@12345678
     volumes:
       - crm_files_data:/app/data/files
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   crm_postgres_data:
+    name: crm_postgres_data
   crm_files_data:
+    name: crm_files_data
