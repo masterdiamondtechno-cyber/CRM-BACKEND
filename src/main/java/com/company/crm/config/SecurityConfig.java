@@ -76,12 +76,30 @@ public class SecurityConfig {
 
   @Bean
   CorsConfigurationSource cors(
-      @org.springframework.beans.factory.annotation.Value("${crm.cors.allowed-origin}")
+      @org.springframework.beans.factory.annotation.Value("${crm.cors.allowed-origin:http://localhost:5173}")
           String origin) {
     CorsConfiguration c = new CorsConfiguration();
-    c.setAllowedOrigins(List.of(origin));
-    c.setAllowedMethods(List.of("GET", "POST", "PATCH", "DELETE", "OPTIONS"));
-    c.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Workspace-Id"));
+    List<String> originList = new ArrayList<>();
+    if (origin != null && !origin.isBlank()) {
+      for (String o : origin.split(",")) {
+        if (!o.trim().isEmpty()) {
+          originList.add(o.trim());
+        }
+      }
+    }
+    originList.add("http://localhost:*");
+    originList.add("https://*.vercel.app");
+    c.setAllowedOriginPatterns(originList);
+    c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    c.setAllowedHeaders(
+        List.of(
+            "Authorization",
+            "Content-Type",
+            "X-Workspace-Id",
+            "Accept",
+            "Origin",
+            "X-Requested-With"));
+    c.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
     s.registerCorsConfiguration("/**", c);
     return s;
