@@ -7,8 +7,8 @@ spring:
     name: crm-backend
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/crm}
-    username: ${DB_USERNAME:crm}
-    password: ${DB_PASSWORD:}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:root}
   jpa:
     hibernate:
       ddl-auto: validate
@@ -25,6 +25,17 @@ spring:
       mail.smtp.starttls.enable: ${MAIL_SMTP_STARTTLS:true}
 server:
   port: ${PORT:8080}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+  health:
+    mail:
+      enabled: false
 crm:
   files:
     directory: ${CRM_FILES_DIRECTORY:./data/files}
@@ -36,7 +47,7 @@ crm:
     frontend-url: ${INVITATION_FRONTEND_URL:}
     expiration-hours: ${INVITATION_EXPIRATION_HOURS:72}
   jwt:
-    secret: ${JWT_SECRET}
+    secret: ${JWT_SECRET:c29tZS1zdXBlci1zZWNyZXQta2V5LWZvci1jcm0tYXBwbGljYXRpb24tc2VjdXJpdHktMjAyNA==}
     expiration-minutes: ${JWT_EXPIRATION_MINUTES:30}
   cors:
     allowed-origin: ${FRONTEND_ORIGIN:http://localhost:5173}

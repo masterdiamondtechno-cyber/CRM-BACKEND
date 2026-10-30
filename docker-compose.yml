@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # ── PostgreSQL Database Container ──────────────────────────────────────────
+  crm-postgres:
+    image: postgres:17-alpine
+    container_name: crm_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: crm
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"
+    volumes:
+      - crm_postgres_data:/var/lib/postgresql/data
+
+  # ── CRM Spring Boot Backend ────────────────────────────────────────────────
+  crm-backend:
+    build: .
+    container_name: crm_backend
+    restart: always
+    depends_on:
+      - crm-postgres
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_URL=jdbc:postgresql://crm-postgres:5432/crm
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=root
+      - JWT_SECRET=c29tZS1zdXBlci1zZWNyZXQta2V5LWZvci1jcm0tYXBwbGljYXRpb24tc2VjdXJpdHktMjAyNA==
+      - FRONTEND_ORIGIN=http://localhost:5173
+      - PORT=8080
+    volumes:
+      - crm_files_data:/app/data/files
+
+volumes:
+  crm_postgres_data:
+  crm_files_data:
