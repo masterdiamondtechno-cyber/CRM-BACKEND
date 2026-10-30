@@ -65,7 +65,7 @@ public class Lead {
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt = Instant.now();
 
-  protected Lead() {}
+  public Lead() {}
 
   @PrePersist
   void attachTenant() {

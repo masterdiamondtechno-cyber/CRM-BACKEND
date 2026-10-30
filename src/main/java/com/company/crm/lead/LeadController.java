@@ -1,102 +1,29 @@
 package com.company.crm.lead;
 
-import com.company.crm.client.*;
 import com.company.crm.common.ApiResponse;
-import com.company.crm.security.TenantContext;
-import com.company.crm.security.TenantMembershipService;
-import com.company.crm.user.*;
+import com.company.crm.lead.dto.LeadRequest;
+import com.company.crm.lead.dto.LeadStatusRequest;
+import com.company.crm.lead.dto.LeadView;
+import com.company.crm.lead.service.LeadService;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.*;
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.util.*;
-import org.springframework.data.domain.*;
-import org.springframework.http.*;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.access.AccessDeniedException;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/v1/leads")
 @Validated
 public class LeadController {
-  private final LeadRepository leads;
-  private final UserRepository users;
-  private final ClientRepository clients;
-  private final JdbcTemplate jdbc;
-  private final TenantMembershipService memberships;
 
-  public LeadController(
-      LeadRepository l,
-      UserRepository u,
-      ClientRepository c,
-      JdbcTemplate j,
-      TenantMembershipService m) {
-    leads = l;
-    users = u;
-    clients = c;
-    jdbc = j;
-    memberships = m;
-  }
+  private final LeadService leadService;
 
-  public record LeadRequest(
-      @NotBlank @Size(max = 200) String title,
-      String description,
-      UUID clientId,
-      UUID contactId,
-      UUID assignedTo,
-      String source,
-      @DecimalMin("0.0") BigDecimal estimatedValue,
-      LocalDate expectedCloseDate) {}
-
-  public record StatusRequest(
-      @NotNull LeadStatus status, String lostReason, @DecimalMin("0.0") BigDecimal finalValue) {}
-
-  public record LeadView(
-      UUID id,
-      String title,
-      String description,
-      UUID clientId,
-      UUID contactId,
-      UUID assignedTo,
-      String assignee,
-      String source,
-      LeadStatus status,
-      BigDecimal estimatedValue,
-      BigDecimal finalValue,
-      LocalDate expectedCloseDate,
-      String lostReason) {}
-
-  private LeadView view(Lead l) {
-    return new LeadView(
-        l.getId(),
-        l.getTitle(),
-        l.getDescription(),
-        l.getClient() == null ? null : l.getClient().getId(),
-        l.getContactId(),
-        l.getAssignedTo().getId(),
-        l.getAssignedTo().getFullName(),
-        l.getSource(),
-        l.getStatus(),
-        l.getEstimatedValue(),
-        l.getFinalValue(),
-        l.getExpectedCloseDate(),
-        l.getLostReason());
-  }
-
-  private boolean all(Authentication a) {
-    return a.getAuthorities().stream()
-        .anyMatch(
-            x -> x.getAuthority().equals("ROLE_ADMIN") || x.getAuthority().equals("ROLE_MANAGER"));
-  }
-
-  private Lead visible(UUID id, Authentication a) {
-    return leads
-        .visible(TenantContext.requireTenantId(), id, all(a), a.getName())
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lead not found"));
+  public LeadController(LeadService leadService) {
+    this.leadService = leadService;
   }
 
   @GetMapping
@@ -105,165 +32,37 @@ public class LeadController {
       @RequestParam(required = false) String search,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
-      Authentication a) {
-    return ApiResponse.ok(
-        "Leads",
-        leads
-            .search(
-                TenantContext.requireTenantId(),
-                all(a),
-                a.getName(),
-                status,
-                search == null ? "" : search,
-                PageRequest.of(page, size, Sort.by("createdAt").descending()))
-            .map(this::view));
+      Authentication auth) {
+    return ApiResponse.ok("Leads", leadService.listLeads(status, search, page, size, auth));
   }
 
   @PostMapping
-  @org.springframework.transaction.annotation.Transactional
   public ResponseEntity<ApiResponse<LeadView>> create(
-      @Valid @RequestBody LeadRequest r, Authentication a) {
-    User actor = user(a);
-    User assignee =
-        r.assignedTo() == null
-            ? actor
-            : users
-                .findById(r.assignedTo())
-                .orElseThrow(
-                    () ->
-                        new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assignee not found"));
-    memberships.requireActiveMember(assignee.getId());
-    if (a.getAuthorities().stream().anyMatch(x -> x.getAuthority().equals("ROLE_EMPLOYEE"))
-        && !assignee.getId().equals(actor.getId()))
-      throw new AccessDeniedException("Cannot assign another employee");
-    UUID tenantId = TenantContext.requireTenantId();
-    Client client =
-        r.clientId() == null
-            ? null
-            : clients
-                .findVisible(tenantId, r.clientId(), all(a), a.getName())
-                .orElseThrow(
-                    () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Client not found"));
-    if (r.contactId() != null) {
-      Integer n =
-          jdbc.queryForObject(
-              "select count(*) from contacts where tenant_id=? and id=? and client_id=?",
-              Integer.class,
-              tenantId,
-              r.contactId(),
-              r.clientId());
-      if (n == null || n == 0)
-        throw new ResponseStatusException(
-            HttpStatus.BAD_REQUEST, "Contact must belong to linked client");
-    }
-    Lead l = new Lead();
-    l.edit(
-        r.title(),
-        r.description(),
-        client,
-        r.contactId(),
-        assignee,
-        r.source(),
-        r.estimatedValue(),
-        r.expectedCloseDate());
-    Lead saved = leads.saveAndFlush(l);
-    jdbc.update(
-        "insert into lead_status_history(id,tenant_id,lead_id,changed_by,new_status,note)"
-            + " values(?,?,?,?, 'NEW','Lead created')",
-        UUID.randomUUID(),
-        tenantId,
-        saved.getId(),
-        actor.getId());
-    return ResponseEntity.status(201).body(ApiResponse.ok("Lead created", view(saved)));
+      @Valid @RequestBody LeadRequest request, Authentication auth) {
+    return ResponseEntity.status(201)
+        .body(ApiResponse.ok("Lead created", leadService.createLead(request, auth)));
   }
 
   @GetMapping("/{id}")
-  public ApiResponse<LeadView> get(@PathVariable UUID id, Authentication a) {
-    return ApiResponse.ok("Lead", view(visible(id, a)));
+  public ApiResponse<LeadView> get(@PathVariable UUID id, Authentication auth) {
+    return ApiResponse.ok("Lead", leadService.getLead(id, auth));
   }
 
   @PatchMapping("/{id}")
   public ApiResponse<LeadView> update(
-      @PathVariable UUID id, @Valid @RequestBody LeadRequest r, Authentication a) {
-    Lead l = visible(id, a);
-    User actor = user(a);
-    User assignee =
-        r.assignedTo() == null ? l.getAssignedTo() : users.findById(r.assignedTo()).orElseThrow();
-    memberships.requireActiveMember(assignee.getId());
-    if (a.getAuthorities().stream().anyMatch(x -> x.getAuthority().equals("ROLE_EMPLOYEE"))
-        && !assignee.getId().equals(actor.getId()))
-      throw new AccessDeniedException("Cannot reassign lead");
-    UUID tenantId = TenantContext.requireTenantId();
-    Client c =
-        r.clientId() == null
-            ? null
-            : clients
-                .findVisible(tenantId, r.clientId(), all(a), a.getName())
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
-    if (r.contactId() != null
-        && (c == null
-            || !Objects.equals(
-                jdbc.queryForObject(
-                    "select client_id from contacts where tenant_id=? and id=?",
-                    UUID.class,
-                    tenantId,
-                    r.contactId()),
-                c.getId())))
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "Contact must belong to linked client");
-    l.edit(
-        r.title(),
-        r.description(),
-        c,
-        r.contactId(),
-        assignee,
-        r.source(),
-        r.estimatedValue(),
-        r.expectedCloseDate());
-    return ApiResponse.ok("Lead updated", view(leads.save(l)));
+      @PathVariable UUID id, @Valid @RequestBody LeadRequest request, Authentication auth) {
+    return ApiResponse.ok("Lead updated", leadService.updateLead(id, request, auth));
   }
 
   @PatchMapping("/{id}/status")
-  @org.springframework.transaction.annotation.Transactional
-  public ApiResponse<LeadView> status(
-      @PathVariable UUID id, @Valid @RequestBody StatusRequest r, Authentication a) {
-    Lead l = visible(id, a);
-    if (l.getStatus() == LeadStatus.WON || l.getStatus() == LeadStatus.LOST)
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "Closed leads cannot change status");
-    if (r.status() == LeadStatus.LOST && (r.lostReason() == null || r.lostReason().isBlank()))
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lostReason is required");
-    if (r.status() == LeadStatus.WON && r.finalValue() == null)
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "finalValue is required when won");
-    LeadStatus old = l.getStatus();
-    l.status(r.status(), r.lostReason(), r.finalValue());
-    Lead saved = leads.save(l);
-    jdbc.update(
-        "insert into"
-            + " lead_status_history(id,tenant_id,lead_id,changed_by,old_status,new_status,note)"
-            + " values(?,?,?,?,?,?,?)",
-        UUID.randomUUID(),
-        TenantContext.requireTenantId(),
-        id,
-        user(a).getId(),
-        old.name(),
-        r.status().name(),
-        r.lostReason());
-    return ApiResponse.ok("Lead status changed", view(saved));
+  public ApiResponse<LeadView> updateStatus(
+      @PathVariable UUID id, @Valid @RequestBody LeadStatusRequest request, Authentication auth) {
+    return ApiResponse.ok("Lead status updated", leadService.updateLeadStatus(id, request, auth));
   }
 
-  @GetMapping("/{id}/history")
-  public ApiResponse<List<Map<String, Object>>> history(@PathVariable UUID id, Authentication a) {
-    visible(id, a);
-    return ApiResponse.ok(
-        "Lead status history",
-        jdbc.queryForList(
-            "select old_status,new_status,note,changed_at from lead_status_history where"
-                + " tenant_id=? and lead_id=? order by changed_at desc",
-            TenantContext.requireTenantId(),
-            id));
-  }
-
-  private User user(Authentication a) {
-    return users.findByEmailIgnoreCase(a.getName()).orElseThrow();
+  @DeleteMapping("/{id}")
+  public ResponseEntity<Void> archive(@PathVariable UUID id, Authentication auth) {
+    leadService.archiveLead(id, auth);
+    return ResponseEntity.noContent().build();
   }
 }

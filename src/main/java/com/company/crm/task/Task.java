@@ -69,7 +69,7 @@ public class Task {
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt = Instant.now();
 
-  protected Task() {}
+  public Task() {}
 
   @PrePersist
   void attachTenant() {

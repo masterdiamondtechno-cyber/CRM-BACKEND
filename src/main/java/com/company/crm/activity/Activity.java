@@ -47,7 +47,7 @@ public class Activity {
   @Column(name = "created_at", nullable = false, updatable = false)
   private Instant createdAt = Instant.now();
 
-  protected Activity() {}
+  public Activity() {}
 
   @PrePersist
   void attachTenant() {
