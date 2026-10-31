@@ -36,11 +36,13 @@ public class ClientController {
       @RequestParam(required = false) LocalDate createdTo,
       @RequestParam(defaultValue = "0") @Min(0) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+      @RequestParam(defaultValue = "createdAt") String sortBy,
+      @RequestParam(defaultValue = "desc") String sortDir,
       Authentication auth) {
     return ApiResponse.ok(
         "Clients",
         clientService.listClients(
-            search, status, ownerId, createdFrom, createdTo, page, size, auth));
+            search, status, ownerId, createdFrom, createdTo, page, size, sortBy, sortDir, auth));
   }
 
   @PostMapping

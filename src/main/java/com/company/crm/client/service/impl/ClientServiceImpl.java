@@ -10,6 +10,7 @@ import com.company.crm.security.TenantContext;
 import com.company.crm.security.TenantMembershipService;
 import com.company.crm.user.User;
 import com.company.crm.user.UserRepository;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
@@ -57,7 +58,16 @@ public class ClientServiceImpl implements ClientService {
       LocalDate createdTo,
       int page,
       int size,
+      String sortBy,
+      String sortDir,
       Authentication auth) {
+    String property = (sortBy == null || sortBy.isBlank()) ? "createdAt" : sortBy.trim();
+    if (!List.of("createdAt", "companyName", "industry", "status", "updatedAt").contains(property)) {
+      property = "createdAt";
+    }
+    Sort.Direction direction =
+        "asc".equalsIgnoreCase(sortDir) ? Sort.Direction.ASC : Sort.Direction.DESC;
+
     return clients
         .search(
             TenantContext.requireTenantId(),
@@ -70,13 +80,21 @@ public class ClientServiceImpl implements ClientService {
             createdTo == null
                 ? null
                 : createdTo.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant(),
-            PageRequest.of(page, size, Sort.by("createdAt").descending()))
+            PageRequest.of(page, size, Sort.by(direction, property)))
         .map(this::toView);
   }
 
   @Override
   public ClientView createClient(ClientRequest r, Authentication auth) {
     User actor = getUser(auth);
+    UUID tenantId = TenantContext.requireTenantId();
+
+    if (clients.existsByTenantIdAndCompanyNameIgnoreCaseAndArchivedAtIsNull(
+        tenantId, r.companyName())) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "A client with company name '" + r.companyName() + "' already exists");
+    }
+
     UUID ownerId = r.ownerId() == null ? actor.getId() : r.ownerId();
     if (isEmployee(auth) && !ownerId.equals(actor.getId())) {
       throw new AccessDeniedException("Employees can assign only themselves");
@@ -103,6 +121,7 @@ public class ClientServiceImpl implements ClientService {
                 r.notes(),
                 owner,
                 r.status()));
+
     return toView(client);
   }
 
@@ -208,6 +227,14 @@ public class ClientServiceImpl implements ClientService {
               .orElseThrow(
                   () -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Owner not found"));
     }
+    UUID tenantId = TenantContext.requireTenantId();
+    if (clients.existsByTenantIdAndCompanyNameIgnoreCaseAndArchivedAtIsNullAndIdNot(
+        tenantId, r.companyName(), id)) {
+      throw new ResponseStatusException(
+          HttpStatus.CONFLICT, "A client with company name '" + r.companyName() + "' already exists");
+    }
+
+    ClientStatus oldStatus = c.getStatus();
     c.update(
         r.companyName(),
         r.industry(),
@@ -218,6 +245,7 @@ public class ClientServiceImpl implements ClientService {
         r.notes(),
         r.status(),
         owner);
+
     return toView(clients.save(c));
   }
 

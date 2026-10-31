@@ -20,6 +20,8 @@ public interface ClientService {
       LocalDate createdTo,
       int page,
       int size,
+      String sortBy,
+      String sortDir,
       Authentication auth);
 
   ClientView createClient(ClientRequest request, Authentication auth);

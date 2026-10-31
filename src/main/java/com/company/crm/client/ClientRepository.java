@@ -16,4 +16,10 @@ public interface ClientRepository extends JpaRepository<Client, UUID>, ClientRep
       @Param("id") UUID id,
       @Param("all") boolean all,
       @Param("email") String email);
+
+  boolean existsByTenantIdAndCompanyNameIgnoreCaseAndArchivedAtIsNull(
+      UUID tenantId, String companyName);
+
+  boolean existsByTenantIdAndCompanyNameIgnoreCaseAndArchivedAtIsNullAndIdNot(
+      UUID tenantId, String companyName, UUID id);
 }
