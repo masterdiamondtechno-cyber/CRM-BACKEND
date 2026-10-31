@@ -18,11 +18,13 @@ public class SecurityConfig {
   @Bean
   SecurityFilterChain security(HttpSecurity h, JwtFilter jwt) throws Exception {
     return h.csrf(c -> c.disable())
-        .cors(c -> {})
+        .cors(c -> c.configurationSource(corsConfigurationSource()))
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             a ->
-                a.requestMatchers(
+                a.requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**")
+                    .permitAll()
+                    .requestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/auth/register",
                         "/api/v1/auth/verify-registration",
@@ -75,31 +77,14 @@ public class SecurityConfig {
   }
 
   @Bean
-  CorsConfigurationSource cors(
-      @org.springframework.beans.factory.annotation.Value("${crm.cors.allowed-origin:http://localhost:5173}")
-          String origin) {
+  CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration c = new CorsConfiguration();
-    List<String> originList = new ArrayList<>();
-    if (origin != null && !origin.isBlank()) {
-      for (String o : origin.split(",")) {
-        if (!o.trim().isEmpty()) {
-          originList.add(o.trim());
-        }
-      }
-    }
-    originList.add("http://localhost:*");
-    originList.add("https://*.vercel.app");
-    c.setAllowedOriginPatterns(originList);
-    c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-    c.setAllowedHeaders(
-        List.of(
-            "Authorization",
-            "Content-Type",
-            "X-Workspace-Id",
-            "Accept",
-            "Origin",
-            "X-Requested-With"));
+    c.setAllowedOriginPatterns(List.of("*"));
+    c.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
+    c.setAllowedHeaders(List.of("*"));
+    c.setExposedHeaders(List.of("*"));
     c.setAllowCredentials(true);
+    c.setMaxAge(3600L);
     UrlBasedCorsConfigurationSource s = new UrlBasedCorsConfigurationSource();
     s.registerCorsConfiguration("/**", c);
     return s;
